@@ -4,19 +4,19 @@ type
   HandlerFunc = proc(state:var ReqState)
   Header = tuple[key:string, val:string]
 
-  RouteType = enum
+  RouteType* = enum
     SUBROUTE, HANDLER
 
-  RouteMethod = enum
+  RouteMethod* = enum
     ALL, GET, POST, PUT, DELETE
 
-  RouteMatch = ref object
-    match: bool
-    partial: bool
-    path: string
-    params: Table[string, string]
+  RouteMatch* = ref object
+    matched*: bool
+    partial*: bool
+    path*: string
+    params*: Table[string, string]
 
-  Route = ref object
+  Route* = ref object
     rMethod: RouteMethod
     path: string
 
@@ -27,12 +27,13 @@ type
       handler: HandlerFunc
 
   Router* = ref object
-    routes: seq[Route]
+    routes*: seq[Route]
 
   ReqState* = ref object
     req*: Request
     params*: Table[string, string]
     query*: Table[string, string]
+    data*: Table[string, string]
     headers*: seq[Header]
     body*: string
     code: HttpCode
@@ -42,9 +43,9 @@ type
 
 # ------------- Helper Methods -------------
 
-proc match(r:Route, m:HttpMethod, path:string):RouteMatch =
+proc match*(r:Route, m:HttpMethod, path:string):RouteMatch =
   new result
-  result.match = false
+  result.matched = false
   result.partial = false
   result.params = initTable[string,string]()
 
@@ -60,6 +61,10 @@ proc match(r:Route, m:HttpMethod, path:string):RouteMatch =
   of ALL:
     discard
 
+  if r.path == "*":
+    result.matched = true
+    return
+
   let rdirs = r.path.strip(chars={'/'}).split('/')
   let pdirs = path.strip(chars={'/'}).split('/')
   if len(rdirs) > len(pdirs):
@@ -73,13 +78,13 @@ proc match(r:Route, m:HttpMethod, path:string):RouteMatch =
     elif ind < len(pdirs)-1 and pdirs[ind] != dir:
       return
   result.path = "/" & pdirs[len(rdirs)..len(pdirs)-1].join("/")
-  result.match = true
+  result.matched = true
 
 
 
 # ------------- Route Methods -------------
 
-proc newRoute(t:RouteType, m:RouteMethod, p:string):Route =
+proc newRoute*(t:RouteType, m:RouteMethod, p:string):Route =
   new result
   result.rType = t
   result.rMethod = m
@@ -147,10 +152,35 @@ proc delete*(self:Router, path:string, handler:HandlerFunc) =
   r.handler = handler
   self.routes.add(r)
 
+proc use*(self:Router, handler:HandlerFunc) =
+  let r = newRoute(HANDLER, ALL, "*")
+  r.handler = handler
+  self.routes.add(r)
+
+proc get*(self:Router, handler:HandlerFunc) =
+  let r = newRoute(HANDLER, GET, "*")
+  r.handler = handler
+  self.routes.add(r)
+
+proc post*(self:Router, handler:HandlerFunc) =
+  let r = newRoute(HANDLER, POST, "*")
+  r.handler = handler
+  self.routes.add(r)
+
+proc put*(self:Router, handler:HandlerFunc) =
+  let r = newRoute(HANDLER, PUT, "*")
+  r.handler = handler
+  self.routes.add(r)
+
+proc delete*(self:Router, handler:HandlerFunc) =
+  let r = newRoute(HANDLER, DELETE, "*")
+  r.handler = handler
+  self.routes.add(r)
+
 proc processState(self:Router, state:var ReqState, path:string) =
   for route in self.routes:
     let m = match(route, state.req.reqMethod, path)
-    if m.match:
+    if m.matched:
       for k,v in m.params:
         state.params[k] = v
       if route.rType == SUBROUTE:
@@ -160,12 +190,13 @@ proc processState(self:Router, state:var ReqState, path:string) =
       if state.handled:
         break
 
-proc processRequest(self:Router, req:Request):ReqState =
+proc processRequest*(self:Router, req:Request):ReqState =
   result = ReqState(
     req: req,
     code: Http404,
     params: initTable[string, string](),
     query: initTable[string, string](),
+    data: initTable[string, string](),
     headers: newSeq[Header](),
     body: "Not found"
   )
@@ -178,96 +209,3 @@ proc serve*(self:Router, port=8080) =
 
   let server = newAsyncHttpServer()
   waitFor server.serve(Port(port), cb)
-
-
-
-# ------------- Unit Tests -------------
-
-when isMainModule:
-
-  import unittest, uri
-
-  suite "helpers":
-    test "match full":
-      let r = newRoute(SUBROUTE, ALL, "/api/@collection/@id")
-      let m = match(r, HttpGet, "/api/projects/12")
-      check(m.match)
-      check(m.params["collection"] == "projects")
-      check(m.params["id"] == "12")
-      check(m.path == "/")
-      check(m.partial == false)
-    test "match partial":
-      let r = newRoute(SUBROUTE, ALL, "/api/@collection")
-      let m = match(r, HttpGet, "/api/projects/12")
-      check(m.match)
-      check(m.params["collection"] == "projects")
-      check(m.path == "/12")
-      check(m.partial == true)
-    test "nonmatch longer":
-      let r = newRoute(SUBROUTE, ALL, "/api/@collection")
-      let m = match(r, HttpGet, "/api")
-      check(not m.match)
-    test "match root":
-      let r = newRoute(SUBROUTE, ALL, "/")
-      let m = match(r, HttpGet, "/")
-      check(m.match)
-      check(m.partial == false)
-    test "match root 2":
-      let r = newRoute(SUBROUTE, ALL, "/")
-      let m = match(r, HttpGet, "")
-      check(m.match)
-      check(m.partial == false)
-    test "match method":
-      let r = newRoute(SUBROUTE, POST, "/")
-      let m = match(r, HttpGet, "/")
-      check(not m.match)
-      let m2 = match(r, HttpPost, "/")
-      check(m2.match)
-      check(m.partial == false)
-
-  suite "router":
-    setup:
-      var r = newRouter()
-
-    test "router/add":
-      let r2 = newRouter()
-      r.add("/api", r2)
-      check(len(r.routes) == 1)
-
-    test "router/use":
-      proc get(s:var ReqState) = discard
-      r.use("/api", get)
-      check(len(r.routes) == 1)
-
-    test "state processing":
-      proc t1(s:var ReqState) =
-        s.body &= s.params["id"]
-      proc t2(s:var ReqState) =
-        s.body = "Hello "
-      proc t3(s:var ReqState) =
-        s.body = "Goodbye "
-
-      let r2 = newRouter()
-      r2.use("/projects/@id", t1)
-
-      r.get("/", t2)
-      r.post("/", t3)
-      r.add("/api", r2)
-
-      let req = Request(
-        reqMethod: HttpGet,
-        url: Uri(
-          path: "/api/projects/34"
-        )
-      )
-      let s = r.processRequest(req)
-      check(s.body == "Hello 34")
-
-      let req2 = Request(
-        reqMethod: HttpPost,
-        url: Uri(
-          path: "/api/projects/34"
-        )
-      )
-      let s2 = r.processRequest(req2)
-      check(s2.body == "Goodbye 34")
