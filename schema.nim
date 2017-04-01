@@ -113,61 +113,64 @@ proc convertToJson*(sch:BsonSchema, b:Bson=nil):JsonNode =
   else:
     discard
 
+
+template typecheck(exp:untyped):untyped =
+  try: return exp
+  except: raise newException(ObjectConversionError, "Can't convert")
+
 proc mergeToBson*(sch:BsonSchema, j:JsonNode, b:Bson=nil):Bson =
   case sch.kind
   of bsBool:
-    if j != nil and j.kind == JBool:
-      return j.bval.toBson
+    if j != nil: typecheck(j.bval.toBson)
     elif b != nil and b.kind == BsonKindBool:
       return b
     else:
       return sch.defaultBool.toBson
   of bsInt:
-    if j != nil and j.kind == JInt:
-      return j.num.toBson
+    if j != nil: typecheck(j.num.toBson)
     elif b != nil and b.kind in [BsonKindInt32,BsonKindInt64]:
       return b
     else:
       return sch.defaultInt.toBson
   of bsFloat:
-    if j != nil and j.kind == JFloat:
-      return j.fnum.toBson
+    if j != nil: typecheck(j.fnum.toBson)
     elif b != nil and b.kind == BsonKindDouble:
       return b
     else:
       return sch.defaultFloat.toBson
   of bsString:
-    if j != nil and j.kind == JString:
-      return j.str.toBson
+    if j != nil: typecheck(j.str.toBson)
     elif b != nil and b.kind == BsonKindStringUTF8:
       return b
     else:
       return sch.defaultString.toBson
   of bsTime:
-    if j != nil and j.kind == JString:
-      return parse(j.str, timeFormat).toTime.toBson
+    if j != nil: typecheck(parse(j.str, timeFormat).toTime.toBson)
     elif b != nil and b.kind == BsonKindTimeUTC:
       return b
     else:
       return sch.defaultTime.toBson
   of bsId:
-    if j != nil and j.kind == JString:
-      return parseOid(cstring(j.str)).toBson
+    if j != nil: typecheck(parseOid(cstring(j.str)).toBson)
     elif b != nil and b.kind == BsonKindOid:
       return b
     else:
       return null()
   of bsRef:
     if j != nil and j.kind == JString:
-      return parseOid(cstring(j.str)).toBson
+      typecheck(parseOid(cstring(j.str)).toBson)
     elif j != nil and j.kind == JObject and j.hasKey("_id"):
-      return parseOid(cstring(j["_id"].str)).toBson
+      typecheck(parseOid(cstring(j["_id"].str)).toBson)
+    elif j != nil:
+      raise newException(ObjectConversionError, "Can't convert")
     elif b != nil and b.kind in [BsonKindOid,BsonKindDocument]:
       return b
     else:
       return null()
   of bsDoc:
-    let jnull = j == nil or j.kind != JObject
+    if j != nil and j.kind != JObject:
+      raise newException(ObjectConversionError, "Can't convert")
+    let jnull = j == nil
     let bnull = b == nil or b.kind != BsonKindDocument
     result = newBsonDocument()
     for k,v in sch.schema:
@@ -179,7 +182,9 @@ proc mergeToBson*(sch:BsonSchema, j:JsonNode, b:Bson=nil):Bson =
       else:                          bn = b[k]
       result[k] = v.mergeToBson(jn, bn)
   of bsList:
-    let jnull = j == nil or j.kind != JArray
+    if j != nil and j.kind != JArray:
+      raise newException(ObjectConversionError, "Can't convert")
+    let jnull = j == nil
     let bnull = b == nil or b.kind != BsonKindArray
     case sch.subtype.kind:
     of bsDoc:

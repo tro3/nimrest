@@ -164,7 +164,7 @@ suite "bson/json conversion":
     check(b.contains("extra") == false)
 
   test "json->bson pass-through values":
-    let j = json.`%*`({})
+    let j:JsonNode = nil
     let bi = bson.`%*`({
       "bool":true,
       "int":2,
@@ -191,7 +191,7 @@ suite "bson/json conversion":
     check(b.contains("extra") == false)
 
   test "json->bson prototype values":
-    let j = json.`%*`({})
+    let j:JsonNode = nil
     let bi = bson.`%*`({})
     let b = sch.mergeToBson(j, bi)
     check(b["bool"].toBool == false)
@@ -203,3 +203,20 @@ suite "bson/json conversion":
     check(b["ref"].kind == BsonKindNull)
     check(b["intlist"].len == 0)
     check(b["objlist"].len == 0)
+
+  test "json->bson error values":
+    let js = @[
+      json.`%*`({"bool":10.2}),
+      json.`%*`({"int":"a"}),
+      json.`%*`({"float":"b"}),
+      json.`%*`({"string":5}),
+      json.`%*`({"id": 28}),
+      json.`%*`({"time": "hello"}),
+      json.`%*`({"intlist": "howdy"}),
+      json.`%*`({"objlist": "yo"}),
+      json.`%*`({"ref": 12}),
+    ]
+    for j in js:
+      expect ObjectConversionError:
+        discard sch.mergeToBson(j)
+        echo "not thrown"
