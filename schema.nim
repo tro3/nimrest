@@ -1,5 +1,4 @@
-import times, oids, tables
-import json except `%*`
+import times, oids, tables, json
 import nimongo.bson
 
 # ------------- type: BsonSchema -------------------#
@@ -69,10 +68,8 @@ proc convertToJson*(sch:BsonSchema, b:Bson=nil):JsonNode =
     else:
       return newJBool(b)
   of bsInt:
-    if b == nil or b.kind notin [
-      BsonKind.BsonKindInt32,
-      BsonKind.BsonKindInt64
-    ]: return newJInt(sch.defaultInt)
+    if b == nil or b.kind notin [BsonKindInt32,BsonKindInt64]:
+      return newJInt(sch.defaultInt)
     else:
       return newJInt(b)
   of bsFloat:
@@ -113,5 +110,107 @@ proc convertToJson*(sch:BsonSchema, b:Bson=nil):JsonNode =
     result = newJArray()
     for v in b.items:
       result.add(sch.subtype.convertToJson(v))
+  else:
+    discard
+
+proc mergeToBson*(sch:BsonSchema, j:JsonNode, b:Bson=nil):Bson =
+  case sch.kind
+  of bsBool:
+    if j != nil and j.kind == JBool:
+      return j.bval.toBson
+    elif b != nil and b.kind == BsonKindBool:
+      return b
+    else:
+      return sch.defaultBool.toBson
+  of bsInt:
+    if j != nil and j.kind == JInt:
+      return j.num.toBson
+    elif b != nil and b.kind in [BsonKindInt32,BsonKindInt64]:
+      return b
+    else:
+      return sch.defaultInt.toBson
+  of bsFloat:
+    if j != nil and j.kind == JFloat:
+      return j.fnum.toBson
+    elif b != nil and b.kind == BsonKindDouble:
+      return b
+    else:
+      return sch.defaultFloat.toBson
+  of bsString:
+    if j != nil and j.kind == JString:
+      return j.str.toBson
+    elif b != nil and b.kind == BsonKindStringUTF8:
+      return b
+    else:
+      return sch.defaultString.toBson
+  of bsTime:
+    if j != nil and j.kind == JString:
+      return parse(j.str, timeFormat).toTime.toBson
+    elif b != nil and b.kind == BsonKindTimeUTC:
+      return b
+    else:
+      return sch.defaultTime.toBson
+  of bsId:
+    if j != nil and j.kind == JString:
+      return parseOid(cstring(j.str)).toBson
+    elif b != nil and b.kind == BsonKindOid:
+      return b
+    else:
+      return null()
+  of bsRef:
+    if j != nil and j.kind == JString:
+      return parseOid(cstring(j.str)).toBson
+    elif j != nil and j.kind == JObject and j.hasKey("_id"):
+      return parseOid(cstring(j["_id"].str)).toBson
+    elif b != nil and b.kind in [BsonKindOid,BsonKindDocument]:
+      return b
+    else:
+      return null()
+  of bsDoc:
+    let jnull = j == nil or j.kind != JObject
+    let bnull = b == nil or b.kind != BsonKindDocument
+    result = newBsonDocument()
+    for k,v in sch.schema:
+      var jn:JsonNode
+      var bn:Bson
+      if jnull or not j.hasKey(k): jn = nil
+      else:                        jn = j[k]
+      if bnull or not b.contains(k): bn = nil
+      else:                          bn = b[k]
+      result[k] = v.mergeToBson(jn, bn)
+  of bsList:
+    let jnull = j == nil or j.kind != JArray
+    let bnull = b == nil or b.kind != BsonKindArray
+    case sch.subtype.kind:
+    of bsDoc:
+      if jnull and bnull:
+        return newBsonArray()
+      elif jnull and not bnull:
+        result = newBsonArray()
+        for v in b.items:
+          result.add(sch.subtype.mergeToBson(nil,v))
+      elif not jnull:
+        result = newBsonArray()
+        # TODO: match by _ids if array of objects
+        for i,v in j.elems:
+          var bval:Bson = nil
+          if not bnull and i < b.len-1:
+            bval = b[i]
+          result.add(sch.subtype.mergeToBson(v,bval))
+    else:
+      if jnull and bnull:
+        return newBsonArray()
+      elif jnull and not bnull:
+        result = newBsonArray()
+        for v in b.items:
+          result.add(sch.subtype.mergeToBson(nil,v))
+      elif not jnull:
+        result = newBsonArray()
+        for v in j.elems:
+          result.add(sch.subtype.mergeToBson(v,nil))
+
+
+
+
   else:
     discard
