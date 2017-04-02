@@ -7,56 +7,56 @@ const timeFormat = "yyyy-MM-dd'T'HH:mm:sszzz"
 
 suite "bson/json conversion":
   setup:
-    let sch = BsonSchema(
-      kind: bsDoc,
+    let sch = BsonType(
+      kind: btDoc,
       schema: {
-        "bool": BsonSchema(
-          kind: bsBool,
+        "bool": BsonType(
+          kind: btBool,
           defaultBool: false
         ),
-        "int": BsonSchema(
-          kind: bsInt,
+        "int": BsonType(
+          kind: btInt,
           defaultInt: 5
         ),
-        "float": BsonSchema(
-          kind: bsFloat,
+        "float": BsonType(
+          kind: btFloat,
           defaultFloat: 5.5
         ),
-        "string": BsonSchema(
-          kind: bsString,
+        "string": BsonType(
+          kind: btString,
           defaultString: "dflt"
         ),
-        "time": BsonSchema(
-          kind: bsTime,
+        "time": BsonType(
+          kind: btTime,
           defaultTime: parse("2015-01-01T00:00:00+00:00", timeFormat).toTime
         ),
-        "id": BsonSchema(
-          kind: bsId,
+        "id": BsonType(
+          kind: btId,
         ),
-        "intlist": BsonSchema(
-          kind: bsList,
-          subtype: BsonSchema(
-            kind: bsInt,
+        "intlist": BsonType(
+          kind: btList,
+          subtype: BsonType(
+            kind: btInt,
             defaultInt: 0,
           ),
         ),
-        "objlist": BsonSchema(
-          kind: bsList,
-          subtype: BsonSchema(
-            kind: bsDoc,
+        "objlist": BsonType(
+          kind: btList,
+          subtype: BsonType(
+            kind: btDoc,
             schema: {
-              "name": BsonSchema(
-                kind: bsString,
+              "name": BsonType(
+                kind: btString,
                 defaultString: "Bob",
               ),
             }.toTable,
           ),
         ),
-        "ref": BsonSchema(
-          kind: bsRef,
+        "ref": BsonType(
+          kind: btRef,
           fields: {
-            "name": BsonSchema(
-              kind: bsString,
+            "name": BsonType(
+              kind: btString,
               defaultString: "Bob",
             ),
           }.toTable,

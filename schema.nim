@@ -1,110 +1,110 @@
 import times, oids, tables, json
 import nimongo.bson
 
-# ------------- type: BsonSchema -------------------#
+# ------------- type: BsonType -------------------#
 
 const timeFormat = "yyyy-MM-dd'T'HH:mm:sszzz"
 
-type BsonSchemaKind* = enum
-  bsBool
-  bsInt
-  bsFloat
-  bsString
-  bsTime
-  bsId
-  bsRef
-  bsList
-  bsDoc
+type BsonTypeKind* = enum
+  btBool
+  btInt
+  btFloat
+  btString
+  btTime
+  btId
+  btRef
+  btList
+  btDoc
 
-type BsonSchema* = ref object
+type BsonType* = ref object
   required*: bool
-  case kind*: BsonSchemaKind
-  of bsBool:
+  case kind*: BsonTypeKind
+  of btBool:
     defaultBool*: bool
-  of bsInt:
+  of btInt:
     defaultInt*: int
-  of bsFloat:
+  of btFloat:
     defaultFloat*: float
-  of bsString:
+  of btString:
     defaultString*: string
-  of bsTime:
+  of btTime:
     defaultTime*: Time
-  of bsId:
+  of btId:
     discard
-  of bsRef:
+  of btRef:
     collection*: string
-    fields*: Table[string, BsonSchema]
-  of bsDoc:
-    schema*: Table[string, BsonSchema]
-  of bsList:
-    subtype*: BsonSchema
+    fields*: Table[string, BsonType]
+  of btDoc:
+    schema*: Table[string, BsonType]
+  of btList:
+    subtype*: BsonType
 
-proc toString*(sch:BsonSchema):string =
+proc toString*(sch:BsonType):string =
   case sch.kind:
-  of bsBool:
+  of btBool:
     result = "bool"
-  of bsInt:
+  of btInt:
     result = "int"
-  of bsFloat:
+  of btFloat:
     result = "float"
-  of bsString:
+  of btString:
     result = "string"
-  of bsTime:
+  of btTime:
     result = "time"
-  of bsRef:
+  of btRef:
     result = "ref"
-  of bsId:
+  of btId:
     result = "id"
-  of bsDoc:
+  of btDoc:
     result = "doc"
-  of bsList:
+  of btList:
     result = "list"
 
-proc convertToJson*(sch:BsonSchema, b:Bson=nil):JsonNode =
+proc convertToJson*(sch:BsonType, b:Bson=nil):JsonNode =
   case sch.kind
-  of bsBool:
+  of btBool:
     if b == nil or b.kind != BsonKindBool:
       return newJBool(sch.defaultBool)
     else:
       return newJBool(b)
-  of bsInt:
+  of btInt:
     if b == nil or b.kind notin [BsonKindInt32,BsonKindInt64]:
       return newJInt(sch.defaultInt)
     else:
       return newJInt(b)
-  of bsFloat:
+  of btFloat:
     if b == nil or b.kind != BsonKindDouble:
       return newJFloat(sch.defaultFloat)
     else:
       return newJFloat(b)
-  of bsString:
+  of btString:
     if b == nil or b.kind != BsonKindStringUTF8:
       return newJString(sch.defaultString)
     else:
       return newJString(b)
-  of bsTime:
+  of btTime:
     if b == nil or b.kind != BsonKindTimeUTC:
       return newJString(format(sch.defaultTime.getGMTime,timeFormat))
     else:
       return newJString(format(b.getGMTime,timeFormat))
-  of bsId:
+  of btId:
     if b == nil or b.kind != BsonKindOid:
       return newJNull()
     else:
       return newJString($b.toOid)
-  of bsRef:
+  of btRef:
     if b == nil or b.kind != BsonKindDocument:
       return newJNull()
     result = newJObject()
     for k,v in sch.fields:
       result[k] = v.convertToJson(b[k])
-  of bsDoc:
+  of btDoc:
     let null = b == nil or b.kind != BsonKindDocument
     result = newJObject()
     for k,v in sch.schema:
       if null:  result[k] = v.convertToJson(nil)
       else:     result[k] = v.convertToJson(b[k])
-  of bsList:
+  of btList:
     if b == nil or b.kind != BsonKindArray:
       return newJArray()
     result = newJArray()
@@ -118,45 +118,45 @@ template typecheck(exp:untyped):untyped =
   try: return exp
   except: raise newException(ObjectConversionError, "Can't convert")
 
-proc mergeToBson*(sch:BsonSchema, j:JsonNode, b:Bson=nil):Bson =
+proc mergeToBson*(sch:BsonType, j:JsonNode, b:Bson=nil):Bson =
   case sch.kind
-  of bsBool:
+  of btBool:
     if j != nil: typecheck(j.bval.toBson)
     elif b != nil and b.kind == BsonKindBool:
       return b
     else:
       return sch.defaultBool.toBson
-  of bsInt:
+  of btInt:
     if j != nil: typecheck(j.num.toBson)
     elif b != nil and b.kind in [BsonKindInt32,BsonKindInt64]:
       return b
     else:
       return sch.defaultInt.toBson
-  of bsFloat:
+  of btFloat:
     if j != nil: typecheck(j.fnum.toBson)
     elif b != nil and b.kind == BsonKindDouble:
       return b
     else:
       return sch.defaultFloat.toBson
-  of bsString:
+  of btString:
     if j != nil: typecheck(j.str.toBson)
     elif b != nil and b.kind == BsonKindStringUTF8:
       return b
     else:
       return sch.defaultString.toBson
-  of bsTime:
+  of btTime:
     if j != nil: typecheck(parse(j.str, timeFormat).toTime.toBson)
     elif b != nil and b.kind == BsonKindTimeUTC:
       return b
     else:
       return sch.defaultTime.toBson
-  of bsId:
+  of btId:
     if j != nil: typecheck(parseOid(cstring(j.str)).toBson)
     elif b != nil and b.kind == BsonKindOid:
       return b
     else:
       return null()
-  of bsRef:
+  of btRef:
     if j != nil and j.kind == JString:
       typecheck(parseOid(cstring(j.str)).toBson)
     elif j != nil and j.kind == JObject and j.hasKey("_id"):
@@ -167,7 +167,7 @@ proc mergeToBson*(sch:BsonSchema, j:JsonNode, b:Bson=nil):Bson =
       return b
     else:
       return null()
-  of bsDoc:
+  of btDoc:
     if j != nil and j.kind != JObject:
       raise newException(ObjectConversionError, "Can't convert")
     let jnull = j == nil
@@ -181,13 +181,13 @@ proc mergeToBson*(sch:BsonSchema, j:JsonNode, b:Bson=nil):Bson =
       if bnull or not b.contains(k): bn = nil
       else:                          bn = b[k]
       result[k] = v.mergeToBson(jn, bn)
-  of bsList:
+  of btList:
     if j != nil and j.kind != JArray:
       raise newException(ObjectConversionError, "Can't convert")
     let jnull = j == nil
     let bnull = b == nil or b.kind != BsonKindArray
     case sch.subtype.kind:
-    of bsDoc:
+    of btDoc:
       if jnull and bnull:
         return newBsonArray()
       elif jnull and not bnull:

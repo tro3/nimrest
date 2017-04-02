@@ -18,31 +18,36 @@ suite "populate":
       "name": "Manhatthan",
       "owner": parseOid("012345670123456701234567"),
     })
+    db["projects"].insert(%*{
+      "_id": parseOid("012345670123456701234569"),
+      "name": "Manhatthan",
+      "owner": parseOid("01234567012345670123456a"),
+    })
     let users = db["users"]
     let projects = db["projects"]
 
-    let schUser = BsonSchema(
-      kind: bsDoc,
+    let schUser = BsonType(
+      kind: btDoc,
       schema: {
-        "_id": BsonSchema(
-          kind: bsId
+        "_id": BsonType(
+          kind: btId
         ),
-        "name": BsonSchema(
-          kind: bsString
+        "name": BsonType(
+          kind: btString
         ),
       }.toTable
     )
-    let schProject = BsonSchema(
-      kind: bsDoc,
+    let schProject = BsonType(
+      kind: btDoc,
       schema: {
-        "_id": BsonSchema(
-          kind: bsId
+        "_id": BsonType(
+          kind: btId
         ),
-        "name": BsonSchema(
-          kind: bsString
+        "name": BsonType(
+          kind: btString
         ),
-        "owner": BsonSchema(
-          kind: bsRef,
+        "owner": BsonType(
+          kind: btRef,
           collection: "users",
           fields: schUser.schema
         ),
@@ -53,7 +58,12 @@ suite "populate":
     discard projects.drop()
     discard users.drop()
 
-  test "basics":
-    var proj = projects.find(%*{}).one()
+  test "basic":
+    var proj = projects.find(%*{"_id": parseOid("012345670123456701234568")}).one()
     proj = schProject.populate(db, proj)
     check(proj["owner"]["name"].toString() == "Fred")
+
+  test "broken reference":
+    var proj = projects.find(%*{"_id": parseOid("012345670123456701234569")}).one()
+    proj = schProject.populate(db, proj)
+    check(proj["owner"].toString() == "Broken Reference")
