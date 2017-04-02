@@ -118,44 +118,26 @@ template typecheck(exp:untyped):untyped =
   try: return exp
   except: raise newException(ObjectConversionError, "Can't convert")
 
+template convertToBson(j, jval, b, kinds, default: untyped):untyped =
+  if j != nil:                       typecheck(j.jval.toBson)
+  elif b != nil and b.kind in kinds: return b
+  else:                              return sch.default.toBson
+
+proc toTime(j:JsonNode):Time = parse(j.str, timeFormat).toTime
+
+proc toOid(j:JsonNode):Oid = parseOid(cstring(j.str))
+
 proc mergeToBson*(sch:BsonType, j:JsonNode, b:Bson=nil):Bson =
   case sch.kind
-  of btBool:
-    if j != nil: typecheck(j.bval.toBson)
-    elif b != nil and b.kind == BsonKindBool:
-      return b
-    else:
-      return sch.defaultBool.toBson
-  of btInt:
-    if j != nil: typecheck(j.num.toBson)
-    elif b != nil and b.kind in [BsonKindInt32,BsonKindInt64]:
-      return b
-    else:
-      return sch.defaultInt.toBson
-  of btFloat:
-    if j != nil: typecheck(j.fnum.toBson)
-    elif b != nil and b.kind == BsonKindDouble:
-      return b
-    else:
-      return sch.defaultFloat.toBson
-  of btString:
-    if j != nil: typecheck(j.str.toBson)
-    elif b != nil and b.kind == BsonKindStringUTF8:
-      return b
-    else:
-      return sch.defaultString.toBson
-  of btTime:
-    if j != nil: typecheck(parse(j.str, timeFormat).toTime.toBson)
-    elif b != nil and b.kind == BsonKindTimeUTC:
-      return b
-    else:
-      return sch.defaultTime.toBson
+  of btBool:   convertToBson(j, bval, b, [BsonKindBool], defaultBool)
+  of btInt:    convertToBson(j, num, b, [BsonKindInt32,BsonKindInt64], defaultInt)
+  of btFloat:  convertToBson(j, fnum, b, [BsonKindDouble], defaultFloat)
+  of btString: convertToBson(j, str, b, [BsonKindStringUTF8], defaultString)
+  of btTime:   convertToBson(j, toTime, b, [BsonKindTimeUTC], defaultTime)
   of btId:
-    if j != nil: typecheck(parseOid(cstring(j.str)).toBson)
-    elif b != nil and b.kind == BsonKindOid:
-      return b
-    else:
-      return null()
+    if j != nil:                             typecheck(j.toOid.toBson)
+    elif b != nil and b.kind == BsonKindOid: return b
+    else:                                    return null()
   of btRef:
     if j != nil and j.kind == JString:
       typecheck(parseOid(cstring(j.str)).toBson)
