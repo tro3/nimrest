@@ -41,47 +41,29 @@ type BsonType* = ref object
 
 proc toString*(sch:BsonType):string =
   case sch.kind:
-  of btBool:
-    result = "bool"
-  of btInt:
-    result = "int"
-  of btFloat:
-    result = "float"
-  of btString:
-    result = "string"
-  of btTime:
-    result = "time"
-  of btRef:
-    result = "ref"
-  of btId:
-    result = "id"
-  of btDoc:
-    result = "doc"
-  of btList:
-    result = "list"
+  of btBool:   return "bool"
+  of btInt:    return "int"
+  of btFloat:  return "float"
+  of btString: return "string"
+  of btTime:   return "time"
+  of btRef:    return "ref"
+  of btId:     return "id"
+  of btDoc:    return "doc"
+  of btList:   return "list"
+
+
+template jsonOrDefault(kname, kinds: untyped):untyped =
+  if b == nil or b.kind notin kinds:
+    return `newJ kname`(sch.`default kname`)
+  else:
+    return `newJ kname`(b)
 
 proc convertToJson*(sch:BsonType, b:Bson=nil):JsonNode =
   case sch.kind
-  of btBool:
-    if b == nil or b.kind != BsonKindBool:
-      return newJBool(sch.defaultBool)
-    else:
-      return newJBool(b)
-  of btInt:
-    if b == nil or b.kind notin [BsonKindInt32,BsonKindInt64]:
-      return newJInt(sch.defaultInt)
-    else:
-      return newJInt(b)
-  of btFloat:
-    if b == nil or b.kind != BsonKindDouble:
-      return newJFloat(sch.defaultFloat)
-    else:
-      return newJFloat(b)
-  of btString:
-    if b == nil or b.kind != BsonKindStringUTF8:
-      return newJString(sch.defaultString)
-    else:
-      return newJString(b)
+  of btBool:   jsonOrDefault(Bool,   [BsonKindBool])
+  of btInt:    jsonOrDefault(Int,    [BsonKindInt32,BsonKindInt64])
+  of btFloat:  jsonOrDefault(Float,  [BsonKindDouble])
+  of btString: jsonOrDefault(String, [BsonKindStringUTF8])
   of btTime:
     if b == nil or b.kind != BsonKindTimeUTC:
       return newJString(format(sch.defaultTime.getGMTime,timeFormat))
@@ -118,7 +100,7 @@ template typecheck(exp:untyped):untyped =
   try: return exp
   except: raise newException(ObjectConversionError, "Can't convert")
 
-template convertToBson(j, jval, b, kinds, default: untyped):untyped =
+template convertToBson(jval, kinds, default: untyped):untyped =
   if j != nil:                       typecheck(j.jval.toBson)
   elif b != nil and b.kind in kinds: return b
   else:                              return sch.default.toBson
@@ -129,11 +111,11 @@ proc toOid(j:JsonNode):Oid = parseOid(cstring(j.str))
 
 proc mergeToBson*(sch:BsonType, j:JsonNode, b:Bson=nil):Bson =
   case sch.kind
-  of btBool:   convertToBson(j, bval, b, [BsonKindBool], defaultBool)
-  of btInt:    convertToBson(j, num, b, [BsonKindInt32,BsonKindInt64], defaultInt)
-  of btFloat:  convertToBson(j, fnum, b, [BsonKindDouble], defaultFloat)
-  of btString: convertToBson(j, str, b, [BsonKindStringUTF8], defaultString)
-  of btTime:   convertToBson(j, toTime, b, [BsonKindTimeUTC], defaultTime)
+  of btBool:   convertToBson(bval,   [BsonKindBool],                defaultBool)
+  of btInt:    convertToBson(num,    [BsonKindInt32,BsonKindInt64], defaultInt)
+  of btFloat:  convertToBson(fnum,   [BsonKindDouble],              defaultFloat)
+  of btString: convertToBson(str,    [BsonKindStringUTF8],          defaultString)
+  of btTime:   convertToBson(toTime, [BsonKindTimeUTC],             defaultTime)
   of btId:
     if j != nil:                             typecheck(j.toOid.toBson)
     elif b != nil and b.kind == BsonKindOid: return b
