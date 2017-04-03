@@ -2,7 +2,6 @@ import tables
 import nimongo.mongo, nimongo.bson
 import schema
 
-
 proc populate*(self:BsonType, db:Database, x:Bson):Bson =
   case self.kind:
   of btDoc:
@@ -26,3 +25,8 @@ proc populate*(self:BsonType, db:Database, x:Bson):Bson =
       result.add(self.subtype.populate(db, item))
   else:
     raise newException(AssertionError, "Populate only applies to documents and lists")
+
+proc populate*(self:BsonType, db:Database, x:seq[Bson]):seq[Bson] =
+  result = newSeq[Bson]()
+  for item in x:
+    result.add(self.populate(db, item))

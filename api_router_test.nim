@@ -112,7 +112,7 @@ suite "getItem":
 
     test "query find":
       var s = newState(db, Request())
-      s.query["name"] = "Brooklyn"
+      s.query["query"] = """{"name":"Brooklyn"}"""
       getList(s)
       check(s.code == Http200)
       check(s.body == $j({
@@ -129,7 +129,7 @@ suite "getItem":
 
     test "not found":
       var s = newState(db, Request())
-      s.query["name"] = "Fred"
+      s.query["query"] = """{"name":"Fred"}"""
       getList(s)
       check(s.code == Http200)
       check(s.body == $j({

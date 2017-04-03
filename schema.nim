@@ -1,5 +1,5 @@
 import times, oids, tables, json
-import nimongo.bson
+import nimongo.bson except `()`
 
 # ------------- type: BsonType -------------------#
 
@@ -90,6 +90,11 @@ proc convertToJson*(sch:BsonType, b:Bson=nil):JsonNode =
       result.add(sch.subtype.convertToJson(v))
   else:
     discard
+
+proc convertToJson*(self:BsonType, x:seq[Bson]):seq[JsonNode] =
+  result = newSeq[JsonNode]()
+  for item in x:
+    result.add(self.convertToJson(item))
 
 
 template typecheck(exp:untyped):untyped =

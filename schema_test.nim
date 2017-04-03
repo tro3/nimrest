@@ -96,7 +96,7 @@ suite "bson/json conversion":
     check(j.hasKey("extra") == false)
 
   test "bson->json default values":
-    let j = sch.convertToJson(nil)
+    let j = sch.convertToJson()
     check(j["bool"].bval == false)
     check(j["int"].num == 5)
     check(j["float"].fnum == 5.5)
