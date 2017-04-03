@@ -24,8 +24,8 @@ suite "getItem":
     }))
     db["projects"].insert(b({
       "_id": parseOid("012345670123456701234569"),
-      "name": "Manhatthan",
-      "owner": parseOid("01234567012345670123456a"),
+      "name": "Brooklyn",
+      "owner": parseOid("012345670123456701234567"),
     }))
     let users = db["users"]
     let projects = db["projects"]
@@ -57,3 +57,82 @@ suite "getItem":
     getItem(s)
     check(s.code == Http404)
     check(s.body == "Not Found")
+
+
+  suite "getList":
+
+    setup:
+      let conn = newMongo()
+      if not conn.connect():
+        raise newException(IOError, "No mongo connection")
+      let db = conn["test"]
+      db["users"].insert(b({
+        "_id": parseOid("012345670123456701234567"),
+        "name": "Fred",
+      }))
+      db["projects"].insert(b({
+        "_id": parseOid("012345670123456701234568"),
+        "name": "Manhatthan",
+        "owner": parseOid("012345670123456701234567"),
+      }))
+      db["projects"].insert(b({
+        "_id": parseOid("012345670123456701234569"),
+        "name": "Brooklyn",
+        "owner": parseOid("012345670123456701234567"),
+      }))
+      let users = db["users"]
+      let projects = db["projects"]
+
+    teardown:
+      discard projects.drop()
+      discard users.drop()
+
+    test "basic find":
+      var s = newState(db, Request())
+      getList(s)
+      check(s.code == Http200)
+      check(s.body == $j({
+        "_status": "OK",
+        "_items": [{
+          "owner": {
+            "_id": "012345670123456701234567",
+            "name": "Fred"
+          },
+          "_id": "012345670123456701234568",
+          "name": "Manhatthan",
+        },{
+          "owner": {
+            "_id": "012345670123456701234567",
+            "name": "Fred"
+          },
+          "_id": "012345670123456701234569",
+          "name": "Brooklyn",
+        }]
+      }))
+
+    test "query find":
+      var s = newState(db, Request())
+      s.query["name"] = "Brooklyn"
+      getList(s)
+      check(s.code == Http200)
+      check(s.body == $j({
+        "_status": "OK",
+        "_items": [{
+          "owner": {
+            "_id": "012345670123456701234567",
+            "name": "Fred"
+          },
+          "_id": "012345670123456701234569",
+          "name": "Brooklyn",
+        }]
+      }))
+
+    test "not found":
+      var s = newState(db, Request())
+      s.query["name"] = "Fred"
+      getList(s)
+      check(s.code == Http200)
+      check(s.body == $j({
+        "_status": "OK",
+        "_items": []
+      }))

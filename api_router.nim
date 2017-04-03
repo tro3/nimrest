@@ -40,10 +40,18 @@ let projectSchema = BsonType(
 )
 
 proc wrap(x:JsonNode):JsonNode =
-  result = json.`%*`({
-    "_status": "OK",
-    "_item": x
-  })
+  if x.kind == JObject:
+    return json.`%*`({
+      "_status": "OK",
+      "_item": x
+    })
+  elif x.kind == JArray:
+    return json.`%*`({
+      "_status": "OK",
+      "_items": x
+    })
+  else:
+    raise newException(ValueError, "wrap only accepts Objects and Arrays")
 
 proc getItem*(s:var ReqState) =
   let cur = s.db["projects"].find(bson.`%*`({"_id": parseOid(s.params["id"])}))
@@ -53,6 +61,15 @@ proc getItem*(s:var ReqState) =
     var doc = cur.one()
     doc = projectSchema.populate(s.db, doc)
     s.json(wrap(projectSchema.convertToJson(doc)))
+
+proc getList*(s:var ReqState) =
+  var spec = newBsonDocument()
+  for key, val in s.query:
+    spec[key] = bson.`%*`(val)
+  var docs = newJArray()
+  for doc in s.db["projects"].find(spec).all():
+    docs.add(projectSchema.convertToJson(projectSchema.populate(s.db, doc)))
+  s.json(wrap(docs))
 
 
 proc apiRouter*():Router =
