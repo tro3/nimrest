@@ -70,13 +70,10 @@ proc convertToJson*(sch:BsonType, b:Bson=nil):JsonNode =
     else:
       return newJString(format(b.getGMTime,timeFormat))
   of btId:
-    if b == nil or b.kind != BsonKindOid:
-      return newJNull()
-    else:
-      return newJString($b.toOid)
+    if b == nil or b.kind != BsonKindOid: return newJNull()
+    else:                                 return newJString($b.toOid)
   of btRef:
-    if b == nil or b.kind != BsonKindDocument:
-      return newJNull()
+    if b == nil or b.kind != BsonKindDocument: return newJNull()
     result = newJObject()
     for k,v in sch.fields:
       result[k] = v.convertToJson(b[k])
@@ -87,8 +84,7 @@ proc convertToJson*(sch:BsonType, b:Bson=nil):JsonNode =
       if null:  result[k] = v.convertToJson(nil)
       else:     result[k] = v.convertToJson(b[k])
   of btList:
-    if b == nil or b.kind != BsonKindArray:
-      return newJArray()
+    if b == nil or b.kind != BsonKindArray: return newJArray()
     result = newJArray()
     for v in b.items:
       result.add(sch.subtype.convertToJson(v))

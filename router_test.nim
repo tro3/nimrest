@@ -1,4 +1,5 @@
 import unittest, uri, httpcore, tables, asynchttpserver
+import nimongo.mongo
 import router
 
 suite "route helpers":
@@ -68,13 +69,15 @@ suite "router":
     r.post(t3)
     r.add("/api", r2)
 
+    let db = newMongo()["test"]
+
     let req = Request(
       reqMethod: HttpGet,
       url: Uri(
         path: "/api/projects/34"
       )
     )
-    let s = r.processRequest(req)
+    let s = r.processRequest(db, req)
     check(s.body == "Hello 34")
 
     let req2 = Request(
@@ -83,5 +86,5 @@ suite "router":
         path: "/api/projects/34"
       )
     )
-    let s2 = r.processRequest(req2)
+    let s2 = r.processRequest(db, req2)
     check(s2.body == "Goodbye 34")

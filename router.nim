@@ -1,4 +1,5 @@
-import asynchttpserver, asyncdispatch, tables, strutils, httpcore
+import asynchttpserver, asyncdispatch, tables, strutils, httpcore, json
+import nimongo.mongo
 
 type
   HandlerFunc = proc(state:var ReqState)
@@ -30,14 +31,15 @@ type
     routes*: seq[Route]
 
   ReqState* = ref object
+    db*: Database[Mongo]
     req*: Request
     params*: Table[string, string]
     query*: Table[string, string]
     data*: Table[string, string]
     headers*: seq[Header]
     body*: string
-    code: HttpCode
-    handled: bool
+    code*: HttpCode
+    handled*: bool
 
 
 
@@ -98,10 +100,10 @@ proc send*(self:ReqState, msg:string) =
   self.body = msg
   self.handled = true
 
-proc json*(self:ReqState, msg:string) =
+proc json*(self:ReqState, doc:JsonNode) =
   self.code = Http200
   self.headers.add(("Content-Type","application/json"))
-  self.body = msg
+  self.body = $doc
   self.handled = true
 
 proc notFound*(self:ReqState) =
@@ -117,6 +119,18 @@ proc unauthorized*(self:ReqState) =
 
 
 # ------------- Router Methods -------------
+
+proc newState*(db:Database[Mongo], req:Request):ReqState =
+  result = ReqState(
+    db: db,
+    req: req,
+    code: Http404,
+    params: initTable[string, string](),
+    query: initTable[string, string](),
+    data: initTable[string, string](),
+    headers: newSeq[Header](),
+    body: "Not found"
+  )
 
 proc newRouter*():Router =
   new result
@@ -190,21 +204,13 @@ proc processState(self:Router, state:var ReqState, path:string) =
       if state.handled:
         break
 
-proc processRequest*(self:Router, req:Request):ReqState =
-  result = ReqState(
-    req: req,
-    code: Http404,
-    params: initTable[string, string](),
-    query: initTable[string, string](),
-    data: initTable[string, string](),
-    headers: newSeq[Header](),
-    body: "Not found"
-  )
+proc processRequest*(self:Router, db:Database[Mongo], req:Request):ReqState =
+  result = newState(db, req)
   self.processState(result, req.url.path)
 
-proc serve*(self:Router, port=8080) =
+proc serve*(self:Router, db:Database[Mongo], port=8080) =
   proc cb(req:Request){.async.} =
-    let state = self.processRequest(req)
+    let state = self.processRequest(db, req)
     await req.respond(state.code, state.body, newHttpHeaders(state.headers))
 
   let server = newAsyncHttpServer()
