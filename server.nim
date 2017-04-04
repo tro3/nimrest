@@ -1,3 +1,4 @@
+import nimongo.mongo
 import router, api_router
 
 proc home(req:var ReqState) =
@@ -7,4 +8,9 @@ let r = newRouter()
 r.add("/api", apiRouter())
 r.get("/", home)
 
-r.serve()
+let m = newMongo()
+if not m.connect():
+  raise newException(IOError, "Couldn't connect to MongoDB")
+let db = m["app"]
+
+r.serve(db)

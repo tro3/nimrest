@@ -106,20 +106,33 @@ proc json*(self:ReqState, doc:JsonNode) =
   self.body = $doc
   self.handled = true
 
-proc notFound*(self:ReqState) =
+template jsonError*(self:ReqState, msg:string) =
+  self.code = Http200
+  self.headers.add(("Content-Type","application/json"))
+  self.body = $json.`%*`({
+    "_status": "ERR",
+    "_msg": msg
+  })
+  self.handled = true
+  return
+
+template notFound*(self:ReqState) =
   self.code = Http404
   self.body = "Not found"
   self.handled = true
+  return
 
-proc unauthorized*(self:ReqState) =
+template unauthorized*(self:ReqState) =
   self.code = Http403
   self.body = "Unauthorized"
   self.handled = true
+  return
 
-proc malformedData*(self:ReqState) =
+template malformedData*(self:ReqState) =
   self.code = Http401
   self.body = "Malformed data"
   self.handled = true
+  return
 
 
 # ------------- Router Methods -------------

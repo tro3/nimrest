@@ -1,4 +1,4 @@
-import times, oids, tables, json
+import times, oids, tables, json, strutils
 import nimongo.bson except `()`
 
 # ------------- type: BsonType -------------------#
@@ -17,6 +17,7 @@ type BsonTypeKind* = enum
   btDoc
 
 type BsonType* = ref object
+  name*: string
   required*: bool
   case kind*: BsonTypeKind
   of btBool:
@@ -101,12 +102,13 @@ template typecheck(exp:untyped):untyped =
   try: return exp
   except: raise newException(
     ObjectConversionError,
-    "Can't convert " & $j & " to " & sch.toString
+    "$1: can't convert $2 to $3" % [sch.name, $j, sch.toString]
   )
 
 template convertToBson(jval, kinds, default: untyped):untyped =
   if j != nil:                       typecheck(j.jval.toBson)
   elif b != nil and b.kind in kinds: return b
+  elif sch.required:                 raise newException(ObjectConversionError, "'$1' is required" % sch.name)
   else:                              return sch.default.toBson
 
 proc toTime(j:JsonNode):Time = parse(j.str, timeFormat).toTime
@@ -130,14 +132,14 @@ proc mergeToBson*(sch:BsonType, j:JsonNode, b:Bson=nil):Bson =
     elif j != nil and j.kind == JObject and j.hasKey("_id"):
       typecheck(parseOid(cstring(j["_id"].str)).toBson)
     elif j != nil:
-      raise newException(ObjectConversionError, "Can't convert")
+      raise newException(ObjectConversionError, "$1: can't convert $2 to id" % [sch.name, $j])
     elif b != nil and b.kind in [BsonKindOid,BsonKindDocument]:
       return b
     else:
       return null()
   of btDoc:
     if j != nil and j.kind != JObject:
-      raise newException(ObjectConversionError, "Can't convert")
+      raise newException(ObjectConversionError, "$1: can't convert $2 to document" % [sch.name, $j])
     let jnull = j == nil
     let bnull = b == nil or b.kind != BsonKindDocument
     result = newBsonDocument()
@@ -151,7 +153,7 @@ proc mergeToBson*(sch:BsonType, j:JsonNode, b:Bson=nil):Bson =
       result[k] = v.mergeToBson(jn, bn)
   of btList:
     if j != nil and j.kind != JArray:
-      raise newException(ObjectConversionError, "Can't convert")
+      raise newException(ObjectConversionError, "$1: can't convert $2 to list" % [sch.name, $j])
     let jnull = j == nil
     let bnull = b == nil or b.kind != BsonKindArray
     case sch.subtype.kind:
@@ -181,9 +183,3 @@ proc mergeToBson*(sch:BsonType, j:JsonNode, b:Bson=nil):Bson =
         result = newBsonArray()
         for v in j.elems:
           result.add(sch.subtype.mergeToBson(v,nil))
-
-
-
-
-  else:
-    discard

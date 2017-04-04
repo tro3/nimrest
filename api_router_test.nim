@@ -42,12 +42,13 @@ suite "getItem":
     check(s.body == $j({
       "_status": "OK",
       "_item": {
-        "owner": {
-        "_id": "012345670123456701234567",
-        "name": "Fred"
-        },
+        "cost": 100,
         "_id": "012345670123456701234568",
         "name": "Manhatthan",
+        "owner": {
+          "_id": "012345670123456701234567",
+          "name": "Fred"
+        },
       }
     }))
 
@@ -94,19 +95,21 @@ suite "getList":
     check(s.body == $j({
       "_status": "OK",
       "_items": [{
-        "owner": {
-          "_id": "012345670123456701234567",
-          "name": "Fred"
-        },
+        "cost": 100,
         "_id": "012345670123456701234568",
         "name": "Manhatthan",
-      },{
         "owner": {
           "_id": "012345670123456701234567",
           "name": "Fred"
         },
+      },{
+        "cost": 100,
         "_id": "012345670123456701234569",
         "name": "Brooklyn",
+        "owner": {
+          "_id": "012345670123456701234567",
+          "name": "Fred"
+        },
       }]
     }))
 
@@ -118,12 +121,13 @@ suite "getList":
     check(s.body == $j({
       "_status": "OK",
       "_items": [{
+        "cost": 100,
+        "_id": "012345670123456701234569",
+        "name": "Brooklyn",
         "owner": {
           "_id": "012345670123456701234567",
           "name": "Fred"
         },
-        "_id": "012345670123456701234569",
-        "name": "Brooklyn",
       }]
     }))
 
@@ -199,7 +203,26 @@ suite "createView":
     check(s.code == Http200)
     let body = parseJson(s.body)
     check(body["_status"].str == "ERR")
-    check(body["_msg"].str == "Can't convert 123 to string")
+    check(body["_msg"].str == "name: can't convert 123 to string")
+    let cur = db["projects"].find(bson.`%*`({}))
+    check(cur.count() == 0)
+
+  test "required field":
+    let req = Request(
+      body: """{
+      "owner": {
+        "_id": "012345670123456701234567",
+        "name": "Fred"
+      },
+      "_id": "012345670123456701234568"
+      }"""
+    )
+    var s = newState(db, req)
+    createView(s)
+    check(s.code == Http200)
+    let body = parseJson(s.body)
+    check(body["_status"].str == "ERR")
+    check(body["_msg"].str == "'name' is required")
     let cur = db["projects"].find(bson.`%*`({}))
     check(cur.count() == 0)
 
@@ -271,6 +294,23 @@ suite "updateView":
     check(s.code == Http200)
     let body = parseJson(s.body)
     check(body["_status"].str == "ERR")
-    check(body["_msg"].str == "Can't convert 123 to string")
+    check(body["_msg"].str == "name: can't convert 123 to string")
     let cur = db["projects"].find(bson.`%*`({}))
     check(cur.count() == 1)
+
+  test "not found":
+    let req = Request(
+      body: """{
+      "owner": {
+        "_id": "012345670123456701234567",
+        "name": "Fred"
+      },
+      "_id": "012345670123456701234568",
+      "name": "Manhattan 2"
+      }"""
+    )
+    var s = newState(db, req)
+    s.params["id"] = "01234567012345670123456b"
+    updateView(s)
+    check(s.code == Http404)
+    check(s.body == "Not found")

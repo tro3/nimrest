@@ -11,29 +11,36 @@ suite "bson/json conversion":
       kind: btDoc,
       schema: {
         "bool": BsonType(
+          name: "bool",
           kind: btBool,
           defaultBool: false
         ),
         "int": BsonType(
+          name: "bool",
           kind: btInt,
           defaultInt: 5
         ),
         "float": BsonType(
+          name: "bool",
           kind: btFloat,
           defaultFloat: 5.5
         ),
         "string": BsonType(
+          name: "bool",
           kind: btString,
           defaultString: "dflt"
         ),
         "time": BsonType(
+          name: "bool",
           kind: btTime,
           defaultTime: parse("2015-01-01T00:00:00+00:00", timeFormat).toTime
         ),
         "id": BsonType(
+        name: "bool",
           kind: btId,
         ),
         "intlist": BsonType(
+          name: "bool",
           kind: btList,
           subtype: BsonType(
             kind: btInt,
@@ -41,6 +48,7 @@ suite "bson/json conversion":
           ),
         ),
         "objlist": BsonType(
+          name: "bool",
           kind: btList,
           subtype: BsonType(
             kind: btDoc,
@@ -53,6 +61,7 @@ suite "bson/json conversion":
           ),
         ),
         "ref": BsonType(
+          name: "bool",
           kind: btRef,
           fields: {
             "name": BsonType(
