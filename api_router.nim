@@ -107,18 +107,19 @@ proc createView*(rs:var ReqState) =
 
 
 proc updateView*(rs:var ReqState) =
-  # Check permission
+  # Check overall permission
 
   var jdata:JsonNode
   try:    jdata = parseJson(rs.req.body)
   except: rs.malformedData()
 
-  # Check other field permissions
+  # Check field permissions
   let cur = rs.db["projects"].find(itemSpec())                                   # Get query
   if cur.count() == 0: rs.notFound()                                             # 404 if not found
 
-  var doc:Bson
-  try:    doc = projectSchema.mergeToBson(jdata, cur.one())                      # Get doc
+  var doc = cur.one()                                                            # Get doc
+  # Check doc permission
+  try:    doc = projectSchema.mergeToBson(jdata, doc)
   except: rs.jsonError(getCurrentExceptionMsg())
 
   discard rs.db["projects"].update(itemSpec(), doc, false, false)
