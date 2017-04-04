@@ -99,7 +99,10 @@ proc convertToJson*(self:BsonType, x:seq[Bson]):seq[JsonNode] =
 
 template typecheck(exp:untyped):untyped =
   try: return exp
-  except: raise newException(ObjectConversionError, "Can't convert")
+  except: raise newException(
+    ObjectConversionError,
+    "Can't convert " & $j & " to " & sch.toString
+  )
 
 template convertToBson(jval, kinds, default: untyped):untyped =
   if j != nil:                       typecheck(j.jval.toBson)

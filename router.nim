@@ -108,7 +108,7 @@ proc json*(self:ReqState, doc:JsonNode) =
 
 proc notFound*(self:ReqState) =
   self.code = Http404
-  self.body = "Not Found"
+  self.body = "Not found"
   self.handled = true
 
 proc unauthorized*(self:ReqState) =
@@ -116,6 +116,10 @@ proc unauthorized*(self:ReqState) =
   self.body = "Unauthorized"
   self.handled = true
 
+proc malformedData*(self:ReqState) =
+  self.code = Http401
+  self.body = "Malformed data"
+  self.handled = true
 
 
 # ------------- Router Methods -------------
