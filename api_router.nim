@@ -94,6 +94,34 @@ proc createView*(s:var ReqState) =
   s.json(wrap(jdoc))
 
 
+proc updateView*(s:var ReqState) =
+  # Check permission
+  var jdata:JsonNode
+  try: jdata = parseJson(s.req.body)
+  except:
+    s.malformedData()
+    return
+  # Check other field permissions
+  let spec = bson.`%*`({"_id": parseOid(s.params["id"])})
+  let cur = s.db["projects"].find(spec)                                          # Get query
+  if cur.count() == 0:                                                           # 404 if no result
+    s.notFound()
+    return
+  var doc:Bson
+  try: doc = projectSchema.mergeToBson(jdata, cur.one())                         # Get doc
+  except ObjectConversionError:
+    s.json(json.`%*`({
+      "_status": "ERR",
+      "_msg": getCurrentExceptionMsg()
+    }))
+    return
+  discard s.db["projects"].update(spec, doc, false, false)
+  doc = projectSchema.populate(s.db, doc)
+  var jdoc = projectSchema.convertToJson(doc)
+  # Remove unauthorized fields                                                   # Apply field permissions
+  s.json(wrap(jdoc))
+
+
 proc apiRouter*():Router =
   result = newRouter()
   result.get("/projects/@id", getItem)
