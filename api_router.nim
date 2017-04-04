@@ -54,26 +54,34 @@ proc wrap(x:seq[JsonNode]):JsonNode =
     "_items": xs
   })
 
+proc serializeDoc(db:Database[Mongo], x:Bson):JsonNode =
+  let doc = projectSchema.populate(db, x)
+  return projectSchema.convertToJson(doc)
+
+proc serializeDocs(db:Database[Mongo], x:seq[Bson]):seq[JsonNode] =
+  let docs = projectSchema.populate(db, x)
+  return projectSchema.convertToJson(docs)
+
+template itemSpec():untyped =
+  bson.`%*`({"_id": parseOid(rs.params["id"])})
+
 proc getItem*(rs:var ReqState) =
-  let cur = rs.db["projects"].find(bson.`%*`({"_id": parseOid(rs.params["id"])}))  # Get query
-  if cur.count() == 0:                                                           # 404 if no result
-    rs.notFound()
-    return
-  let doc = projectSchema.populate(rs.db, cur.one())                              # Get doc
-  var jdoc = projectSchema.convertToJson(doc)                                    # Jsonify doc
-  # Check authorization                                                          # Check auth: 404 if denied
+  let cur = rs.db["projects"].find(itemSpec())                                   # Get query
+  if cur.count() == 0: rs.notFound()                                             # 404 if no result
+  let doc = cur.one()                                                            # Get doc
+  # Check authorization or 404                                                   # Check auth
+  var jdoc = serializeDoc(rs.db, doc)                                            # Jsonify doc
   # Remove unauthorized fields                                                   # Apply field permissions
   rs.json(wrap(jdoc))
 
 proc getList*(rs:var ReqState) =
   var spec = newBsonDocument()
-  if rs.query.hasKey("query"):                                                    # Get query
+  if rs.query.hasKey("query"):                                                   # Get query
     let jspec = parseJson(rs.query["query"])
     spec = specFromJson(jspec)
-  var docs = rs.db["projects"].find(spec).all()                                   # get docs
-  docs = projectSchema.populate(rs.db, docs)
-  var jdocs = projectSchema.convertToJson(docs)                                  # Jsonify docs
-  # For item in jdocs: remove unauthorized docs                                  # Apply doc permissions
+  var docs = rs.db["projects"].find(spec).all()                                  # get docs
+  # For item in docs: remove unauthorized docs                                   # Apply doc permissions
+  var jdocs = serializeDocs(rs.db, docs)                                         # Jsonify docs
   # For item in jdocs: remove unauthorized fields                                # Apply field permissions
   rs.json(wrap(jdocs))
 
@@ -82,19 +90,18 @@ proc createView*(rs:var ReqState) =
   # Check permission
 
   var jdata:JsonNode
-  try: jdata = parseJson(rs.req.body)
+  try:    jdata = parseJson(rs.req.body)
   except: rs.malformedData()
 
   # Check other field permissions
   var doc:Bson
-  try: doc = projectSchema.mergeToBson(jdata)
-  except ObjectConversionError: rs.jsonError(getCurrentExceptionMsg())
+  try:    doc = projectSchema.mergeToBson(jdata)
+  except: rs.jsonError(getCurrentExceptionMsg())
 
   doc["_id"] = genOid().toBson()
   discard rs.db["projects"].insert(doc)
 
-  doc = projectSchema.populate(rs.db, doc)
-  var jdoc = projectSchema.convertToJson(doc)
+  var jdoc = serializeDoc(rs.db, doc)
   # Remove unauthorized fields                                                   # Apply field permissions
   rs.json(wrap(jdoc))
 
@@ -103,23 +110,20 @@ proc updateView*(rs:var ReqState) =
   # Check permission
 
   var jdata:JsonNode
-  try: jdata = parseJson(rs.req.body)
+  try:    jdata = parseJson(rs.req.body)
   except: rs.malformedData()
 
   # Check other field permissions
-  let spec = bson.`%*`({"_id": parseOid(rs.params["id"])})
-  let cur = rs.db["projects"].find(spec)                                          # Get query
-  if cur.count() == 0: rs.notFound()
+  let cur = rs.db["projects"].find(itemSpec())                                   # Get query
+  if cur.count() == 0: rs.notFound()                                             # 404 if not found
 
   var doc:Bson
-  try: doc = projectSchema.mergeToBson(jdata, cur.one())                         # Get doc
-  except ObjectConversionError: rs.jsonError(getCurrentExceptionMsg())
+  try:    doc = projectSchema.mergeToBson(jdata, cur.one())                      # Get doc
+  except: rs.jsonError(getCurrentExceptionMsg())
 
-  discard rs.db["projects"].update(spec, doc, false, false)
+  discard rs.db["projects"].update(itemSpec(), doc, false, false)
 
-  doc = projectSchema.populate(rs.db, doc)
-  var jdoc = projectSchema.convertToJson(doc)
-
+  var jdoc = serializeDoc(rs.db, doc)
   # Remove unauthorized fields                                                   # Apply field permissions
   rs.json(wrap(jdoc))
 
